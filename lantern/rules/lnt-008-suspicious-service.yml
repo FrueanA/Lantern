@@ -1,0 +1,40 @@
+id: LNT-008
+title: Service installed from a suspicious path
+severity: high
+attack: [T1543.003]
+description: >
+  A new service (System event 7045) runs a binary from a user-writable folder
+  or wraps a shell or script host. Attackers install services for
+  persistence and to run code as SYSTEM.
+detection:
+  service_installed:
+    EventID: 7045
+    Channel: System
+  suspicious_image_path:
+    ImagePath|contains:
+      - '\Users\Public\'
+      - '\AppData\'
+      - '\Temp\'
+      - '%COMSPEC%'
+      - 'cmd.exe /c'
+      - 'cmd /c'
+      - powershell
+      - rundll32
+      - mshta
+  condition: service_installed and suspicious_image_path
+fields: [ServiceName, ImagePath, AccountName, StartType]
+falsepositives:
+  - Poorly packaged software that installs its service under AppData
+references:
+  - https://attack.mitre.org/techniques/T1543/003/
+tests:
+  match:
+    - EventID: 7045
+      Channel: System
+      ServiceName: WinUpdateSvc
+      ImagePath: '%COMSPEC% /c C:\Users\Public\svc.exe'
+  nomatch:
+    - EventID: 7045
+      Channel: System
+      ServiceName: Google Update Service (gupdate)
+      ImagePath: '"C:\Program Files (x86)\Google\Update\GoogleUpdate.exe" /svc'

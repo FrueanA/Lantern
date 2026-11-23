@@ -1,0 +1,40 @@
+id: LNT-015
+title: RDP logon from a public IP address
+severity: high
+attack: [T1133, T1021.001]
+description: >
+  A Remote Desktop logon (logon type 10) came from an address outside
+  private, loopback and link-local ranges. RDP exposed to the internet is one
+  of the most common ransomware entry points.
+detection:
+  rdp_logon:
+    EventID: 4624
+    Channel: Security
+    LogonType: 10
+  filter_private:
+    IpAddress|cidr:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 127.0.0.0/8
+      - 169.254.0.0/16
+      - '::1/128'
+      - 'fc00::/7'
+      - 'fe80::/10'
+  filter_missing:
+    IpAddress: [null, '-']
+  condition: rdp_logon and not 1 of filter_*
+fields: [TargetUserName, IpAddress, WorkstationName]
+falsepositives:
+  - Staff connecting directly from home where RDP is intentionally exposed (fix the exposure instead)
+references:
+  - https://attack.mitre.org/techniques/T1133/
+tests:
+  match:
+    - {EventID: 4624, Channel: Security, LogonType: 10, IpAddress: 203.0.113.45}
+    - {EventID: 4624, Channel: Security, LogonType: '10', IpAddress: '::ffff:198.51.100.7'}
+  nomatch:
+    - {EventID: 4624, Channel: Security, LogonType: 10, IpAddress: 10.0.20.15}
+    - {EventID: 4624, Channel: Security, LogonType: 10, IpAddress: '::ffff:192.168.1.20'}
+    - {EventID: 4624, Channel: Security, LogonType: 3, IpAddress: 203.0.113.45}
+    - {EventID: 4624, Channel: Security, LogonType: 10, IpAddress: '-'}

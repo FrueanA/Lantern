@@ -1,0 +1,55 @@
+id: LNT-007
+title: Process opened LSASS memory
+severity: critical
+attack: [T1003.001]
+description: >
+  A process opened lsass.exe with access rights used to read its memory,
+  which holds credentials for logged-on users. Credential dumping tools
+  request these rights. Trusted security products are filtered by their full
+  install path rather than their file name, so a renamed tool dropped
+  elsewhere cannot hide behind a familiar name.
+detection:
+  lsass_access:
+    EventID: 10
+    Channel: Microsoft-Windows-Sysmon/Operational
+    TargetImage|endswith: '\lsass.exe'
+    GrantedAccess: ['0x1010', '0x1410', '0x1438', '0x143a', '0x1f3fff', '0x1fffff']
+  filter_defender:
+    SourceImage|startswith:
+      - 'C:\ProgramData\Microsoft\Windows Defender\Platform\'
+      - 'C:\Program Files\Windows Defender\'
+      - 'C:\Program Files\Windows Defender Advanced Threat Protection\'
+  filter_windows:
+    SourceImage:
+      - 'C:\Windows\System32\wininit.exe'
+      - 'C:\Windows\System32\csrss.exe'
+      - 'C:\Windows\System32\lsm.exe'
+  condition: lsass_access and not 1 of filter_*
+fields: [SourceImage, SourceUser, GrantedAccess, CallTrace]
+falsepositives:
+  - Other EDR or backup agents; add their install paths to a filter
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+tests:
+  match:
+    - EventID: 10
+      Channel: Microsoft-Windows-Sysmon/Operational
+      SourceImage: C:\Users\Public\svc.exe
+      TargetImage: C:\Windows\system32\lsass.exe
+      GrantedAccess: '0x1010'
+    - EventID: 10
+      Channel: Microsoft-Windows-Sysmon/Operational
+      SourceImage: C:\Users\Public\MsMpEng.exe
+      TargetImage: C:\Windows\system32\lsass.exe
+      GrantedAccess: '0x1410'
+  nomatch:
+    - EventID: 10
+      Channel: Microsoft-Windows-Sysmon/Operational
+      SourceImage: C:\ProgramData\Microsoft\Windows Defender\Platform\4.18.24010.12-0\MsMpEng.exe
+      TargetImage: C:\Windows\system32\lsass.exe
+      GrantedAccess: '0x1410'
+    - EventID: 10
+      Channel: Microsoft-Windows-Sysmon/Operational
+      SourceImage: C:\Windows\System32\svchost.exe
+      TargetImage: C:\Windows\system32\lsass.exe
+      GrantedAccess: '0x1000'

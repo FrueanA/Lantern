@@ -1,0 +1,31 @@
+id: LNT-011
+title: Possible Kerberoasting (many RC4 service tickets)
+type: threshold
+severity: high
+attack: [T1558.003]
+description: >
+  One client requested RC4-encrypted (0x17) service tickets for many
+  different service accounts in a short time. Kerberoasting requests these
+  tickets to crack service account passwords offline. Modern clients use AES
+  by default, so a burst of RC4 requests stands out.
+detection:
+  rc4_service_ticket:
+    EventID: 4769
+    Channel: Security
+    TicketEncryptionType: '0x17'
+    Status: '0x0'
+  filter_machine_accounts:
+    ServiceName|endswith: '$'
+  filter_krbtgt:
+    ServiceName: krbtgt
+  condition: rc4_service_ticket and not 1 of filter_*
+threshold:
+  group_by: [IpAddress]
+  distinct: ServiceName
+  count: 5
+  window: 10m
+fields: [TargetUserName, ServiceName, IpAddress, TicketEncryptionType]
+falsepositives:
+  - Legacy applications that only support RC4
+references:
+  - https://attack.mitre.org/techniques/T1558/003/

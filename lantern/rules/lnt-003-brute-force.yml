@@ -1,0 +1,22 @@
+id: LNT-003
+title: Repeated failed logons for one account
+type: threshold
+severity: medium
+attack: [T1110.001]
+description: >
+  The same source failed to log on as the same account many times in a short
+  window, which suggests password guessing.
+detection:
+  failed_logon:
+    EventID: 4625
+    Channel: Security
+  condition: failed_logon
+threshold:
+  group_by: [IpAddress, TargetUserName]
+  count: 15
+  window: 10m
+fields: [IpAddress, TargetUserName, LogonType, SubStatus]
+falsepositives:
+  - A device or mapped drive retrying an expired password
+references:
+  - https://attack.mitre.org/techniques/T1110/001/

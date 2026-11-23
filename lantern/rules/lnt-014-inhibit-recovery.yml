@@ -1,0 +1,30 @@
+id: LNT-014
+title: Shadow copies or backups deleted
+severity: critical
+attack: [T1490]
+description: >
+  A command deleted volume shadow copies or the backup catalog, or turned off
+  Windows recovery. Ransomware does this right before encrypting so victims
+  cannot restore files. Treat it as an active incident.
+detection:
+  vssadmin_delete:
+    CommandLine|contains|all: [vssadmin, delete, shadows]
+  wmic_shadowcopy_delete:
+    CommandLine|contains|all: [shadowcopy, delete]
+  wbadmin_delete:
+    CommandLine|contains|all: [wbadmin, delete]
+  bcdedit_recovery_off:
+    CommandLine|contains|all: [bcdedit, recoveryenabled, 'no']
+  condition: 1 of them
+fields: [User, SubjectUserName, CommandLine]
+falsepositives:
+  - Storage administrators pruning old shadow copies by hand
+references:
+  - https://attack.mitre.org/techniques/T1490/
+tests:
+  match:
+    - {EventID: 4688, CommandLine: vssadmin.exe Delete Shadows /All /Quiet}
+    - {EventID: 1, CommandLine: wmic shadowcopy delete}
+    - {EventID: 1, CommandLine: 'bcdedit /set {default} recoveryenabled No'}
+  nomatch:
+    - {EventID: 4688, CommandLine: vssadmin.exe list shadows}

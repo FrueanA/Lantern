@@ -1,0 +1,47 @@
+id: LNT-009
+title: Suspicious scheduled task created
+severity: high
+attack: [T1053.005]
+description: >
+  A scheduled task was created (event 4698) whose action starts a shell or
+  script host, or a binary in a user-writable folder. Built-in tasks under
+  \Microsoft\ are excluded.
+detection:
+  task_created:
+    EventID: 4698
+    Channel: Security
+  suspicious_action:
+    TaskContent|contains:
+      - powershell
+      - 'cmd.exe'
+      - mshta
+      - rundll32
+      - regsvr32
+      - wscript
+      - cscript
+      - '\Users\Public\'
+      - '\AppData\'
+      - '\Temp\'
+  filter_builtin:
+    TaskName|startswith: '\Microsoft\'
+  condition: task_created and suspicious_action and not filter_builtin
+fields: [TaskName, SubjectUserName, TaskContent]
+falsepositives:
+  - IT automation that schedules PowerShell maintenance scripts
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4698
+tests:
+  match:
+    - EventID: 4698
+      Channel: Security
+      TaskName: \Updater
+      TaskContent: <Exec><Command>powershell.exe</Command><Arguments>-w hidden -f C:\Users\Public\u.ps1</Arguments></Exec>
+  nomatch:
+    - EventID: 4698
+      Channel: Security
+      TaskName: \Microsoft\Windows\UpdateOrchestrator\Schedule Scan
+      TaskContent: <Exec><Command>powershell.exe</Command></Exec>
+    - EventID: 4698
+      Channel: Security
+      TaskName: \Backup\Nightly
+      TaskContent: <Exec><Command>C:\Program Files\Veeam\Endpoint Backup\Veeam.EndPoint.Manager.exe</Command></Exec>

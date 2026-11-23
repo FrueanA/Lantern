@@ -1,0 +1,34 @@
+id: LNT-004
+title: Successful logon after repeated failures
+type: sequence
+severity: critical
+attack: [T1110, T1078]
+description: >
+  A source that failed to log on several times then logged on successfully.
+  This is the point where a guessing or spraying attempt turns into access,
+  so it deserves a faster response than the failures alone.
+sequence:
+  by: [IpAddress]
+  window: 30m
+  steps:
+    - name: failed logons
+      min_count: 5
+      detection:
+        failed_logon:
+          EventID: 4625
+          Channel: Security
+        condition: failed_logon
+    - name: successful logon
+      detection:
+        successful_logon:
+          EventID: 4624
+          Channel: Security
+          LogonType: [2, 3, 7, 10, 11]
+        filter_loopback:
+          IpAddress|cidr: [127.0.0.0/8, '::1/128']
+        condition: successful_logon and not filter_loopback
+fields: [IpAddress, TargetUserName, LogonType]
+falsepositives:
+  - A user who mistyped their password several times before getting it right
+references:
+  - https://attack.mitre.org/techniques/T1078/

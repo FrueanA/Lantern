@@ -1,0 +1,29 @@
+id: LNT-001
+title: Windows event log cleared
+severity: high
+attack: [T1070.001]
+description: >
+  The Security log was cleared (event 1102), or another log was cleared
+  (System event 104). Attackers clear logs to remove evidence of what they
+  did. Legitimate clears are rare and are usually tied to a change ticket.
+detection:
+  security_log_cleared:
+    EventID: 1102
+    Channel: Security
+  other_log_cleared:
+    EventID: 104
+    Channel: System
+    Provider: Microsoft-Windows-Eventlog
+  condition: security_log_cleared or other_log_cleared
+fields: [SubjectUserName, SubjectDomainName, EventData.Channel]
+falsepositives:
+  - Administrators clearing logs during a planned rebuild
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-1102
+tests:
+  match:
+    - {EventID: 1102, Channel: Security, SubjectUserName: j.alvarez}
+    - {EventID: 104, Channel: System, Provider: Microsoft-Windows-Eventlog}
+  nomatch:
+    - {EventID: 1100, Channel: Security}
+    - {EventID: 104, Channel: Application}

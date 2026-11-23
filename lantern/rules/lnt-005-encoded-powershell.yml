@@ -1,0 +1,36 @@
+id: LNT-005
+title: PowerShell started with an encoded command
+severity: high
+attack: [T1059.001, T1027]
+description: >
+  PowerShell was launched with -EncodedCommand (or one of its abbreviations)
+  and a base64 payload. Encoding hides the real command from casual review.
+  Lantern decodes the payload and shows it with the finding.
+detection:
+  powershell_process:
+    - EventID: 4688
+      NewProcessName|endswith: ['\powershell.exe', '\pwsh.exe']
+    - EventID: 1
+      Channel: Microsoft-Windows-Sysmon/Operational
+      Image|endswith: ['\powershell.exe', '\pwsh.exe']
+  encoded_argument:
+    CommandLine|re: '\s-(e|ec|en|enc|enco|encod|encode|encoded|encodedcommand)\s+[A-Za-z0-9+/=]{16,}'
+  condition: powershell_process and encoded_argument
+fields: [User, SubjectUserName, ParentImage, ParentProcessName, CommandLine]
+falsepositives:
+  - Some management agents (SCCM, RMM tools) launch encoded PowerShell; baseline them by parent process
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_pwsh
+tests:
+  match:
+    - EventID: 1
+      Channel: Microsoft-Windows-Sysmon/Operational
+      Image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+      CommandLine: powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQA
+    - EventID: 4688
+      NewProcessName: C:\Program Files\PowerShell\7\pwsh.exe
+      CommandLine: pwsh -EncodedCommand ZQBjAGgAbwAgACIAaABlAGwAbABvACIA
+  nomatch:
+    - EventID: 4688
+      NewProcessName: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+      CommandLine: powershell.exe -ExecutionPolicy Bypass -File C:\Scripts\inventory.ps1

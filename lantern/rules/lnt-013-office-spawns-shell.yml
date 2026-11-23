@@ -1,0 +1,30 @@
+id: LNT-013
+title: Office application started a shell or script host
+severity: high
+attack: [T1566.001, T1204.002]
+description: >
+  Word, Excel, PowerPoint, Outlook, OneNote or Access started a shell,
+  script host or LOLBin. This is the classic sign of a malicious macro or
+  attachment running code.
+detection:
+  office_parent:
+    - ParentImage|endswith: ['\winword.exe', '\excel.exe', '\powerpnt.exe', '\outlook.exe', '\onenote.exe', '\msaccess.exe']
+    - ParentProcessName|endswith: ['\winword.exe', '\excel.exe', '\powerpnt.exe', '\outlook.exe', '\onenote.exe', '\msaccess.exe']
+  shell_child:
+    - Image|endswith: ['\cmd.exe', '\powershell.exe', '\pwsh.exe', '\wscript.exe', '\cscript.exe', '\mshta.exe', '\rundll32.exe', '\regsvr32.exe', '\certutil.exe', '\bitsadmin.exe']
+    - NewProcessName|endswith: ['\cmd.exe', '\powershell.exe', '\pwsh.exe', '\wscript.exe', '\cscript.exe', '\mshta.exe', '\rundll32.exe', '\regsvr32.exe', '\certutil.exe', '\bitsadmin.exe']
+  condition: office_parent and shell_child
+fields: [User, ParentImage, Image, CommandLine]
+falsepositives:
+  - Add-ins that shell out for legitimate reasons; baseline by command line
+references:
+  - https://attack.mitre.org/techniques/T1204/002/
+tests:
+  match:
+    - EventID: 1
+      ParentImage: C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE
+      Image: C:\Windows\System32\cmd.exe
+  nomatch:
+    - EventID: 1
+      ParentImage: C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE
+      Image: C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE

