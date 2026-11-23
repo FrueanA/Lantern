@@ -33,4 +33,4 @@ jobs:
           name: hunt-report
           path: |
             hunt-report.html
-            findings.json.github/workflows/ci.yml
+            findings.json
