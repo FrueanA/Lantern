@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+# Reports generated from your own logs can contain sensitive data.
+report*.html
+findings*.json
+*.evtx
